@@ -2,6 +2,7 @@
 #include <gtk/gtk.h>
 #include <gdk/gdk.h>
 #include <gst/video/videooverlay.h>
+#include <curl/curl.h>
 
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
@@ -18,6 +19,7 @@ static struct VideoElements
 } videoElements;
 
 static guintptr handler = 0;
+static char *initUrl = NULL;
 static GtkWidget* create_menu(void);
 static void on_app_activate(GtkApplication*, gpointer);
 static void on_activate(GtkWidget*, gpointer);
@@ -27,6 +29,11 @@ static gboolean on_button_press_event(GtkWidget*, GdkEvent*, gpointer);
 static void on_realize(GtkWidget*, GstElement*);
 static GstBusSyncReply bus_sync_handler(GstBus*, GstMessage*, gpointer);
 static gboolean on_bus(GstBus*, GstMessage*, gpointer);
+#ifdef WIN32
+static ssize_t getline(char **lineptr, size_t *n, FILE *stream);
+#endif
+static size_t write_func(void*, size_t, size_t, FILE*);
+static size_t read_func(char*, size_t, size_t, FILE*);
 
 int main(int argc, char *argv[])
 {
@@ -40,84 +47,71 @@ int main(int argc, char *argv[])
 static void on_app_activate(GtkApplication *app, gpointer data)
 {
 	GtkWidget *window = gtk_application_window_new(app);
-	GtkWidget *video = gtk_drawing_area_new();
-	g_signal_connect(video, "realize", G_CALLBACK(on_realize), NULL);
 
 	GtkWidget *menuBar = gtk_menu_bar_new();
 	GtkWidget *channelItem = gtk_menu_item_new_with_label("频道");
 	gtk_menu_shell_append(GTK_MENU_SHELL(menuBar), channelItem);
 	GtkWidget *channelMenu = gtk_menu_new();
 	gtk_menu_item_set_submenu(GTK_MENU_ITEM(channelItem), channelMenu);
-	GtkWidget *firstItem = gtk_menu_item_new_with_label("中央1套");
-	g_signal_connect(G_OBJECT(firstItem), "activate", G_CALLBACK(on_activate),  "https://cntv.sbs/live?auth=230612&id=cctv1");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), firstItem);
-	GtkWidget *secondItem = gtk_menu_item_new_with_label("中央2套");
-	g_signal_connect(G_OBJECT(secondItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv2");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), secondItem);
-	GtkWidget *thirdItem = gtk_menu_item_new_with_label("中央3套");
-	g_signal_connect(G_OBJECT(thirdItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv3");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), thirdItem);
-	GtkWidget *fourthItem = gtk_menu_item_new_with_label("中央4套");
-	g_signal_connect(G_OBJECT(fourthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv4");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), fourthItem);
-	GtkWidget *fifthItem = gtk_menu_item_new_with_label("中央5套");
-	g_signal_connect(G_OBJECT(fifthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv5");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), fifthItem);
-	GtkWidget *sixthItem = gtk_menu_item_new_with_label("中央6套");
-	g_signal_connect(G_OBJECT(sixthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv6");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), sixthItem);
-	GtkWidget *seventhItem = gtk_menu_item_new_with_label("中央7套");
-	g_signal_connect(G_OBJECT(seventhItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv7");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), seventhItem);
-	GtkWidget *eighthItem = gtk_menu_item_new_with_label("中央8套");
-	g_signal_connect(G_OBJECT(eighthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv8");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), eighthItem);
-	GtkWidget *ninthItem = gtk_menu_item_new_with_label("中央9套");
-	g_signal_connect(G_OBJECT(ninthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv9");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), ninthItem);
-	GtkWidget *tenthItem = gtk_menu_item_new_with_label("中央10套");
-	g_signal_connect(G_OBJECT(tenthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv10");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), tenthItem);
-	GtkWidget *eleventhItem = gtk_menu_item_new_with_label("中央11套");
-	g_signal_connect(G_OBJECT(eleventhItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv11");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), eleventhItem);
-	GtkWidget *twelfthItem = gtk_menu_item_new_with_label("中央12套");
-	g_signal_connect(G_OBJECT(twelfthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv12");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), twelfthItem);
-	GtkWidget *thirteenthItem = gtk_menu_item_new_with_label("中央13套");
-	g_signal_connect(G_OBJECT(thirteenthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv13");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), thirteenthItem);
-	GtkWidget *fourteenthItem = gtk_menu_item_new_with_label("中央14套");
-	g_signal_connect(G_OBJECT(fourteenthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv14");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), fourteenthItem);
-	GtkWidget *fifteenthItem = gtk_menu_item_new_with_label("中央15套");
-	g_signal_connect(G_OBJECT(fifteenthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv15");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), fifteenthItem);
-	GtkWidget *sixteenthItem = gtk_menu_item_new_with_label("中央16套");
-	g_signal_connect(G_OBJECT(sixteenthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv16");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), sixteenthItem);
-	GtkWidget *sixtethkItem = gtk_menu_item_new_with_label("中央16套4k");
-	g_signal_connect(G_OBJECT(sixtethkItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv164k");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), sixtethkItem);
-	GtkWidget *seventeenthItem = gtk_menu_item_new_with_label("中央17套");
-	g_signal_connect(G_OBJECT(seventeenthItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv17");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), seventeenthItem);
-	GtkWidget *kItem = gtk_menu_item_new_with_label("中央4k");
-	g_signal_connect(G_OBJECT(kItem), "activate", G_CALLBACK(on_activate), "https://cntv.sbs/live?auth=230612&id=cctv4k");
-	gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), kItem);
-
 	GtkWidget *menu = gtk_menu_new();
-	gtk_menu_shell_append(GTK_MENU_SHELL(menu), firstItem);
-	gtk_menu_shell_append(GTK_MENU_SHELL(menu), secondItem);
+
 	g_signal_connect(window, "button-press-event", G_CALLBACK(on_button_press_event), menu);
 	g_signal_connect(window, "configure_event", G_CALLBACK(on_configure_event), NULL);
 
 	GtkWidget *mainbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+	GtkWidget *video = gtk_drawing_area_new();
+	g_signal_connect(video, "realize", G_CALLBACK(on_realize), NULL);
 	gtk_box_pack_start(GTK_BOX(mainbox), GTK_WIDGET(menuBar), FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(mainbox), GTK_WIDGET(video), TRUE, TRUE, 0);
 	gtk_container_add(GTK_CONTAINER(window), mainbox);
 
 	gtk_widget_set_size_request(window, 400, 300);
+
+	CURL *curl = curl_easy_init();
+	if (curl) {
+		char *curDir = g_get_current_dir();
+		char *path = malloc(strlen(curDir) + 12);
+		strcpy(path, curDir);
+		strcat(path, "/global.m3u");
+		FILE *fp = fopen(path, "w");
+		curl_easy_setopt(curl, CURLOPT_URL, "https://live.fanmingming.com/tv/m3u/global.m3u");
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_func);
+		curl_easy_setopt(curl, CURLOPT_READFUNCTION, read_func);
+		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+		curl_easy_perform(curl);
+		fclose(fp);
+		curl_easy_cleanup(curl);
+
+		fp = fopen(path, "r");
+		char *line = NULL;
+		char name[20] = {0}, uri[100] = {0};
+		size_t leng = 0;
+		while (getline(&line, &leng, fp) > 0) {
+			char *nameStart = strstr(line, "tvg-name=\"");
+			if (nameStart) {
+				nameStart += strlen("tvg-name=\"");
+				char *nameEnd = strchr(nameStart, '\"');
+				int nameleng = nameEnd - nameStart;
+				memset(name, 0, sizeof name);
+				strncpy(name, nameStart, nameleng);
+			} else if (strncmp(line, "https://", strlen("https://")) == 0 && name[0] != 0) {
+				if (!initUrl) {
+					initUrl = calloc(1, strlen(line) - 1);
+					strncpy(initUrl, line, strlen(line) - 1);
+				}
+				memset(uri, 0, sizeof uri);
+				strncpy(uri, line, strlen(line) - 1);
+				GtkWidget *item = gtk_menu_item_new_with_label(name);
+				g_signal_connect(G_OBJECT(item), "activate", G_CALLBACK(on_activate), uri);
+				gtk_menu_shell_append(GTK_MENU_SHELL(channelMenu), item);
+				//gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+				memset(name, 0, 10);
+			}
+			leng = 0;
+		}
+		free(line);
+	}
 	gtk_widget_show_all(window);
 	return;
 }
@@ -148,7 +142,7 @@ static void on_realize(GtkWidget *video, GstElement *data)
 		exit(EXIT_FAILURE);
 	}
 	gst_bin_add(GST_BIN(videoElements.pipeline), videoElements.playbin);
-	g_object_set(G_OBJECT(videoElements.playbin), "uri", "https://cntv.sbs/live?auth=230612&id=cctv1", NULL);
+	g_object_set(G_OBJECT(videoElements.playbin), "uri", initUrl, NULL);
 	gst_element_set_state(videoElements.pipeline, GST_STATE_PLAYING);
 	GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(videoElements.pipeline));
 	gst_bus_set_sync_handler(bus, (GstBusSyncHandler)bus_sync_handler, videoElements.pipeline, NULL);
@@ -220,4 +214,50 @@ static gboolean on_bus(GstBus *bus, GstMessage *msg, gpointer data)
 		break;
 	}
 	return TRUE;
+}
+#ifdef WIN32
+#define GETLINE_BUFLEN 128
+static ssize_t getline(char **lineptr, size_t *n, FILE *stream)
+{
+	char* bufptr;
+	char* p;
+	size_t size;
+	int c;
+	if (!lineptr || !n || !stream)
+		return -1;
+	bufptr = *lineptr;
+	size = *n;
+	c = fgetc(stream);
+	if (c == EOF)
+		return -1;
+	if (!bufptr) {
+		if ((bufptr = (char*)malloc(GETLINE_BUFLEN)) == NULL)
+			return -1;
+		size = GETLINE_BUFLEN;
+	}
+	p = bufptr;
+	while (c != EOF) {
+		if ((p - bufptr) > (size - 1)) {
+			size = size + GETLINE_BUFLEN;
+			if ((bufptr = (char*)realloc(bufptr, size)) == NULL)
+				return -1;
+		}
+		*p++ = c;
+		if (c == '\n')
+			break;
+		c = fgetc(stream);
+	}
+	*p++ = 0;
+	*lineptr = bufptr;
+	*n = size;
+	return p - bufptr - 1;
+}
+#endif
+static size_t write_func(void *ptr, size_t size, size_t memb, FILE *fp)
+{
+	return fwrite(ptr, size, memb, fp);
+}
+static size_t read_func(char *ptr, size_t size, size_t memb, FILE *fp)
+{
+	return fread(ptr, size, memb, fp);
 }
